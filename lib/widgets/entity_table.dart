@@ -1,0 +1,129 @@
+import 'package:flutter/material.dart';
+
+class TableColumnSpec<T> {
+  final String label;
+  final String? sortField;
+  final bool numeric;
+  final Widget Function(T item) build;
+
+  const TableColumnSpec({
+    required this.label,
+    required this.build,
+    this.sortField,
+    this.numeric = false,
+  });
+}
+
+class EntityTable<T> extends StatelessWidget {
+  final List<TableColumnSpec<T>> columns;
+  final List<T> items;
+
+  final String Function(T item) idOf;
+  final Set<String> selected;
+  final ValueChanged<String>? onToggleSelect;
+
+  final String? sortField;
+  final bool sortAscending;
+  final void Function(String field)? onSort;
+
+  final List<Widget> Function(T item)? actions;
+
+  final Widget Function(T item)? mobileItemBuilder;
+
+  const EntityTable({
+    super.key,
+    required this.columns,
+    required this.items,
+    required this.idOf,
+    this.selected = const <String>{},
+    this.onToggleSelect,
+    this.sortField,
+    this.sortAscending = true,
+    this.onSort,
+    this.actions,
+    this.mobileItemBuilder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
+
+    if (isMobile && mobileItemBuilder != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final item in items) mobileItemBuilder!(item),
+        ],
+      );
+    }
+
+    final tableColumns = <DataColumn>[
+      for (final column in columns)
+        DataColumn(
+          label: Text(column.label),
+          numeric: column.numeric,
+          onSort: column.sortField != null && onSort != null
+              ? (_, _) => onSort!(column.sortField!)
+              : null,
+        ),
+    ];
+
+    if (actions != null) {
+      tableColumns.add(
+        const DataColumn(
+          label: Text('Действия'),
+        ),
+      );
+    }
+
+    final sortIndex = sortField == null
+        ? -1
+        : columns.indexWhere(
+          (column) => column.sortField == sortField,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: availableWidth,
+            ),
+            child: DataTable(
+              sortColumnIndex:
+              sortIndex >= 0 ? sortIndex : null,
+              sortAscending: sortAscending,
+              showCheckboxColumn: onToggleSelect != null,
+              columns: tableColumns,
+              rows: [
+                for (final item in items)
+                  DataRow(
+                    selected: selected.contains(idOf(item)),
+                    onSelectChanged: onToggleSelect != null
+                        ? (_) => onToggleSelect!(idOf(item))
+                        : null,
+                    cells: [
+                      for (final column in columns)
+                        DataCell(
+                          column.build(item),
+                        ),
+                      if (actions != null)
+                        DataCell(
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: actions!(item),
+                          ),
+                        ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
